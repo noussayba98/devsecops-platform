@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/node-service-template
 
 jobs:
   test-and-build:
@@ -38,13 +42,25 @@ jobs:
         run: npm test
 
       - name: Build Docker image
-        run: docker build -t node-service-template:ci .
+        run: docker build --pull -t "${IMAGE_NAME}:${GITHUB_SHA}" .
 
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: node-service-template:ci
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: table
           exit-code: "1"
           ignore-unfixed: true
           severity: HIGH,CRITICAL
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        if: github.event_name == 'push'
+        run: docker push "${IMAGE_NAME}:${GITHUB_SHA}"
